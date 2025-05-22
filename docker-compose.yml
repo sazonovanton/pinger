@@ -7,7 +7,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=31415
-      - DELAY=30
+      - DELAY=300
       - SSH_TIMEOUT=20
       - HTTP_TIMEOUT=20
       - PING_TIMEOUT=5
