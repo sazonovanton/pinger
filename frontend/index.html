@@ -216,6 +216,7 @@
                             <select class="form-select" id="protocol" required>
                                 <option value="SSH">SSH</option>
                                 <option value="HTTP">HTTP</option>
+                                <option value="PING">PING</option>
                             </select>
                         </div>
                         
@@ -355,6 +356,21 @@
                         const urlEl = document.getElementById('url');
                         if (hostEl) hostEl.required = true;
                         if (urlEl) urlEl.required = false;
+                    } else if (this.value === 'PING') {
+                        // Show host input but hide port input for PING
+                        if (sshHostInput) sshHostInput.style.display = 'block';
+                        if (sshPortInput) sshPortInput.style.display = 'none';
+                        
+                        // Hide SSH and HTTP specific options
+                        if (sshOptions) sshOptions.style.display = 'none';
+                        if (httpOptions) httpOptions.style.display = 'none';
+                        if (httpUrlInput) httpUrlInput.style.display = 'none';
+                        
+                        // Make host field required and HTTP fields not required
+                        const hostEl = document.getElementById('host');
+                        const urlEl = document.getElementById('url');
+                        if (hostEl) hostEl.required = true;
+                        if (urlEl) urlEl.required = false;
                     } else {
                         // Hide SSH inputs
                         if (sshOptions) sshOptions.style.display = 'none';
@@ -388,6 +404,10 @@
                         const portEl = document.getElementById('port');
                         host = hostEl ? hostEl.value : '';
                         port = portEl && portEl.value ? parseInt(portEl.value) : 22;
+                    } else if (protocol === 'PING') {
+                        const hostEl = document.getElementById('host');
+                        host = hostEl ? hostEl.value : '';
+                        port = 0; // Port not used for PING
                     } else {
                         // Parse URL for HTTP protocol
                         try {
@@ -546,8 +566,12 @@
                         </div>
                         <div class="card-body">
                             <p class="card-text">
-                                <span class="badge ${service.protocol === 'SSH' ? 'bg-success' : 'bg-primary'}">${service.protocol}</span>
-                                ${displayAddress}
+                                <span class="badge ${
+                                    service.protocol === 'SSH' ? 'bg-success' : 
+                                    service.protocol === 'HTTP' ? 'bg-primary' : 
+                                    'bg-info'
+                                }">${service.protocol}</span>
+                                ${service.protocol === 'PING' ? service.host : displayAddress}
                                 ${service.protocol === 'HTTP' && service.path && service.path !== '/' ? 
                                     `<span style="color: var(--text-muted, #6c757d);">${service.path}</span>` : ''}
                             </p>

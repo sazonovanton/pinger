@@ -7,6 +7,8 @@ import logging
 from contextlib import asynccontextmanager
 import socket
 import httpx
+import subprocess
+import shutil
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,8 +26,10 @@ load_dotenv()
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 DELAY = int(os.getenv("DELAY", "300"))  # 5 minutes
-SSH_TIMEOUT = int(os.getenv("SSH_TIMEOUT", "10"))
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "30"))
+SSH_TIMEOUT = int(os.getenv("SSH_TIMEOUT", "20"))
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "20"))
+PING_TIMEOUT = int(os.getenv("PING_TIMEOUT", "5"))
+PING_COUNT = int(os.getenv("PING_COUNT", "2"))
 
 # Database setup (location: /app/data/monitoring.db)
 if not os.path.exists("/app/data"):
@@ -69,7 +73,7 @@ class BaseModelWithConfig(BaseModel):
     )
 
 class ServiceBase(BaseModelWithConfig):
-    protocol: Literal["SSH", "HTTP"]
+    protocol: Literal["SSH", "HTTP", "PING"]
     host: str
     port: int
     alias: str
@@ -82,6 +86,8 @@ class ServiceBase(BaseModelWithConfig):
         if 'protocol' in values:
             if values['protocol'] == 'SSH' and v == 0:
                 return 22
+            elif values['protocol'] == 'PING' and v == 0:
+                return 0  # Port is not used for PING
         return v
 
     @validator('path')
@@ -143,6 +149,8 @@ async def monitor_services():
                         await check_ssh(service, db)
                     elif service.protocol == "HTTP":
                         await check_http(service, db)
+                    elif service.protocol == "PING":
+                        await check_ping(service, db)
                 except Exception as e:
                     logging.error(f"Error monitoring service {service.id}: {str(e)}")
                 await asyncio.sleep(1)  # Small delay between checks
@@ -227,6 +235,61 @@ async def check_http(service, db):
         response_time=response_time,
         error_message=error_msg,
         http_status=http_status
+    )
+    db.add(service_status)
+    db.commit()
+
+async def check_ping(service, db):
+    start_time = time.time()
+    status = False
+    error_msg = None
+    
+    try:
+        # Try different ping command locations
+        ping_cmd = None
+        for cmd_path in ['/bin/ping', '/usr/bin/ping', '/sbin/ping', 'ping']:
+            if cmd_path == 'ping':
+                # Check if ping is in PATH
+                if not shutil.which('ping'):
+                    continue
+                ping_cmd = 'ping'
+                break
+            elif os.path.exists(cmd_path):
+                ping_cmd = cmd_path
+                break
+        
+        if not ping_cmd:
+            error_msg = "Could not find ping command on the system"
+            status = False
+        else:
+            # Run ping command asynchronously
+            proc = await asyncio.create_subprocess_exec(
+                ping_cmd, 
+                '-c', str(PING_COUNT),  # Count
+                '-W', str(PING_TIMEOUT),  # Timeout in seconds
+                service.host,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await proc.communicate()
+            
+            if proc.returncode == 0:
+                status = True
+            else:
+                error_msg = f"Ping failed with exit code {proc.returncode}"
+                if stderr:
+                    error_msg += f": {stderr.decode('utf-8', errors='ignore').strip()}"
+    except Exception as e:
+        error_msg = str(e)
+    
+    response_time = time.time() - start_time
+    
+    service_status = ServiceStatus(
+        service_id=service.id,
+        status=status,
+        response_time=response_time,
+        error_message=error_msg
     )
     db.add(service_status)
     db.commit()

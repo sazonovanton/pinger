@@ -7,9 +7,11 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=31415
-      - DELAY=300
+      - DELAY=30
       - SSH_TIMEOUT=20
       - HTTP_TIMEOUT=20
+      - PING_TIMEOUT=5
+      - PING_COUNT=1
     volumes:
       - ./data:/app/data
     restart: unless-stopped
