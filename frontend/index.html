@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг Сервисов</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        :root {
+            /* Light theme variables */
+            --bs-body-color: #212529;
+            --bs-body-bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --card-border: rgba(0, 0, 0, 0.125);
+            --text-muted: #6c757d;
+            --header-bg: #f0f0f0;
+            --form-bg: #ffffff;
+            --form-color: #212529;
+        }
+        
+        [data-bs-theme="dark"] {
+            /* Dark theme variables */
+            --bs-body-color: #e9ecef;
+            --bs-body-bg: #121212;
+            --card-bg: #1e1e1e;
+            --card-border: rgba(255, 255, 255, 0.2);
+            --text-muted: #adb5bd;
+            --header-bg: #212529;
+            --form-bg: #2b3035;
+            --form-color: #e9ecef;
+        }
+        
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-color: var(--card-border);
+            margin-bottom: 20px;
+            transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card-header {
+            background-color: var(--header-bg);
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--form-bg);
+            border-color: var(--card-border);
+            color: var(--form-color);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--form-bg);
+            color: var(--form-color);
+        }
+        
+        [data-bs-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        
+        .theme-switcher {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1030;
+        }
+        
+        .status-marker {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            cursor: pointer;
+        }
+        
+        .status-marker.success {
+            background-color: #28a745;
+        }
+        
+        .status-marker.warning {
+            background-color: #ffc107;
+        }
+        
+        .status-marker.error {
+            background-color: #dc3545;
+        }
+        
+        .marker-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            min-height: 30px;
+        }
+        
+        .service-card {
+            transition: all 0.3s ease;
+        }
+        
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .last-status {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        
+        /* Theme icon styles */
+        .theme-icon-light, .theme-icon-dark {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+        }
+        
+        .theme-icon-light {
+            display: none;
+        }
+        
+        [data-bs-theme="dark"] .theme-icon-light {
+            display: inline-block;
+        }
+        
+        [data-bs-theme="dark"] .theme-icon-dark {
+            display: none;
+        }
+        
+        /* Custom tooltip styles */
+        #marker-tooltip {
+            opacity: 1 !important;
+            transition: none !important;
+            animation: none !important;
+            pointer-events: auto !important;
+        }
+        
+        #marker-tooltip .tooltip-inner {
+            opacity: 1 !important;
+            background-color: rgba(0, 0, 0, 0.95) !important;
+            color: white !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+            border: none !important;
+        }
+        
+        .status-marker.error:hover + #marker-tooltip .tooltip-inner,
+        .status-marker.warning:hover + #marker-tooltip .tooltip-inner {
+            background-color: rgba(0, 0, 0, 0.95) !important;
+        }
+        
+        .tooltip.show {
+            opacity: 1 !important;
+        }
+        
+        .tooltip-inner {
+            opacity: 1 !important;
+            background-color: var(--card-bg) !important;
+        }
+        
+        .status-marker:hover::before {
+            opacity: 1 !important;
+        }
+        
+        .tooltip.bs-tooltip-auto[data-popper-placement^=top] .tooltip-arrow::before, 
+        .tooltip.bs-tooltip-top .tooltip-arrow::before {
+            border-top-color: #000 !important;
+        }
+        
+        .tooltip.bs-tooltip-auto[data-popper-placement^=bottom] .tooltip-arrow::before, 
+        .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+            border-top-color: #000 !important;
+        }
+        
+        .tooltip .tooltip-inner {
+            background-color: #000 !important;
+            color: #fff !important;
+            opacity: 1 !important;
+            max-width: 300px !important;
+            padding: 10px !important;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5) !important;
+            border-radius: 6px !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Theme Switcher -->
+    <div class="theme-switcher">
+        <button class="btn btn-outline-secondary rounded-circle p-2" id="theme-toggle" aria-label="Переключить тему">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-sun-fill theme-icon-light" viewBox="0 0 16 16">
+                <path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-moon-fill theme-icon-dark" viewBox="0 0 16 16">
+                <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="container py-4">
+        <h1 class="mb-4 text-center">Мониторинг Сервисов</h1>
+        
+        <!-- Add New Service Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Добавить новый сервис</h5>
+            </div>
+            <div class="card-body">
+                <form id="service-form">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="protocol" class="form-label">Протокол</label>
+                            <select class="form-select" id="protocol" required>
+                                <option value="SSH">SSH</option>
+                                <option value="HTTP">HTTP</option>
+                            </select>
+                        </div>
+                        
+                        <!-- SSH inputs -->
+                        <div class="col-md-3" id="ssh-host-input">
+                            <label for="host" class="form-label">Хост/IP</label>
+                            <input type="text" class="form-control" id="host" placeholder="Пример: 192.168.1.1" required>
+                        </div>
+                        <div class="col-md-2" id="ssh-port-input">
+                            <label for="port" class="form-label">Порт</label>
+                            <input type="number" class="form-control" id="port" placeholder="22" value="22">
+                        </div>
+                        
+                        <!-- HTTP URL input -->
+                        <div class="col-md-5" id="http-url-input" style="display: none;">
+                            <label for="url" class="form-label">URL</label>
+                            <input type="url" class="form-control" id="url" placeholder="https://example.com">
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="alias" class="form-label">Название</label>
+                            <input type="text" class="form-control" id="alias" placeholder="Мой сервер" required>
+                        </div>
+                        
+                        <!-- Dynamic options based on protocol selection -->
+                        <div class="col-md-6" id="ssh-options">
+                            <label for="username" class="form-label">Имя пользователя (Опционально)</label>
+                            <input type="text" class="form-control" id="username" placeholder="test">
+                        </div>
+                        
+                        <div class="col-md-6" id="http-options" style="display: none;">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="ignore-http-errors">
+                                <label class="form-check-label" for="ignore-http-errors">
+                                    Игнорировать ошибки HTTP (300-500)
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12 text-end">
+                            <button type="submit" class="btn btn-primary">Добавить сервис</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Service Monitoring Grid -->
+        <h2 class="mb-3">Статус мониторинга</h2>
+        <div id="services-container" class="row">
+            <!-- Service cards will be dynamically added here -->
+            <div class="col-12 text-center my-5" id="no-services-message">
+                <p class="text-muted">Пока нет сервисов на мониторинге. Добавьте сервис через форму выше.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tooltip template -->
+    <div class="tooltip-template d-none">
+        <div class="tooltip-inner"></div>
+    </div>
+    
+    <!-- Toast for notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toast-title">Уведомление</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Закрыть"></button>
+            </div>
+            <div class="toast-body" id="toast-message">
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Theme management
+            const themeToggle = document.getElementById('theme-toggle');
+            const htmlElement = document.documentElement;
+            
+            // Function to set theme
+            function setTheme(theme) {
+                htmlElement.setAttribute('data-bs-theme', theme);
+                localStorage.setItem('theme', theme);
+            }
+            
+            // Initialize theme from localStorage or system preference
+            function initializeTheme() {
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme) {
+                    setTheme(savedTheme);
+                } else {
+                    // Check system preference
+                    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                        setTheme('dark');
+                    } else {
+                        setTheme('light');
+                    }
+                }
+            }
+            
+            // Toggle theme
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function() {
+                    const currentTheme = htmlElement.getAttribute('data-bs-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    setTheme(newTheme);
+                });
+            }
+            
+            // Initialize theme
+            initializeTheme();
+            
+            // Protocol selection change
+            const protocolSelect = document.getElementById('protocol');
+            const sshOptions = document.getElementById('ssh-options');
+            const httpOptions = document.getElementById('http-options');
+            const sshHostInput = document.getElementById('ssh-host-input');
+            const sshPortInput = document.getElementById('ssh-port-input');
+            const httpUrlInput = document.getElementById('http-url-input');
+            
+            if (protocolSelect) {
+                protocolSelect.addEventListener('change', function() {
+                    if (this.value === 'SSH') {
+                        // Show SSH inputs
+                        if (sshOptions) sshOptions.style.display = 'block';
+                        if (sshHostInput) sshHostInput.style.display = 'block';
+                        if (sshPortInput) sshPortInput.style.display = 'block';
+                        
+                        // Hide HTTP inputs
+                        if (httpOptions) httpOptions.style.display = 'none';
+                        if (httpUrlInput) httpUrlInput.style.display = 'none';
+                        
+                        // Make SSH fields required and HTTP fields not required
+                        const hostEl = document.getElementById('host');
+                        const urlEl = document.getElementById('url');
+                        if (hostEl) hostEl.required = true;
+                        if (urlEl) urlEl.required = false;
+                    } else {
+                        // Hide SSH inputs
+                        if (sshOptions) sshOptions.style.display = 'none';
+                        if (sshHostInput) sshHostInput.style.display = 'none';
+                        if (sshPortInput) sshPortInput.style.display = 'none';
+                        
+                        // Show HTTP inputs
+                        if (httpOptions) httpOptions.style.display = 'block';
+                        if (httpUrlInput) httpUrlInput.style.display = 'block';
+                        
+                        // Make HTTP fields required and SSH fields not required
+                        const hostEl = document.getElementById('host');
+                        const urlEl = document.getElementById('url');
+                        if (hostEl) hostEl.required = false;
+                        if (urlEl) urlEl.required = true;
+                    }
+                });
+            }
+            
+            // Form submission
+            const serviceForm = document.getElementById('service-form');
+            if (serviceForm) {
+                serviceForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const protocol = document.getElementById('protocol')?.value || 'SSH';
+                    let host, port, path = null;
+                    
+                    if (protocol === 'SSH') {
+                        const hostEl = document.getElementById('host');
+                        const portEl = document.getElementById('port');
+                        host = hostEl ? hostEl.value : '';
+                        port = portEl && portEl.value ? parseInt(portEl.value) : 22;
+                    } else {
+                        // Parse URL for HTTP protocol
+                        try {
+                            const urlEl = document.getElementById('url');
+                            const urlInput = urlEl ? urlEl.value.trim() : '';
+                            if (!urlInput) {
+                                showToast('Ошибка', 'URL обязателен');
+                                return;
+                            }
+                            
+                            // Normalize URL - ensure it has a protocol
+                            const fullUrl = urlInput.startsWith('http') ? urlInput : `http://${urlInput}`;
+                            console.log('Original URL:', urlInput);
+                            console.log('Normalized URL:', fullUrl);
+                            
+                            // Parse URL manually to ensure all parts are captured
+                            const url = new URL(fullUrl);
+                            
+                            // Extract hostname and port
+                            host = url.hostname;
+                            port = url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80);
+                            
+                            // Extract path - ensure it's a string and has at least '/'
+                            path = url.pathname;
+                            if (!path || path === '') {
+                                path = '/';
+                            }
+                            
+                            // Log all parsed URL components
+                            console.log('URL components:', {
+                                protocol: url.protocol,
+                                hostname: host,
+                                port: port,
+                                pathname: path,
+                                search: url.search,
+                                hash: url.hash
+                            });
+                        } catch (error) {
+                            showToast('Ошибка', 'Неверный формат URL');
+                            return;
+                        }
+                    }
+                    
+                    const aliasEl = document.getElementById('alias');
+                    const usernameEl = document.getElementById('username');
+                    const ignoreHttpErrorsEl = document.getElementById('ignore-http-errors');
+                    
+                    const alias = aliasEl ? aliasEl.value : '';
+                    const username = usernameEl ? usernameEl.value : '';
+                    const ignoreHttpErrors = ignoreHttpErrorsEl ? ignoreHttpErrorsEl.checked : false;
+                    
+                    if (!alias) {
+                        showToast('Ошибка', 'Название обязательно');
+                        return;
+                    }
+                    
+                    try {
+                        // Log request data for debugging
+                        const requestData = {
+                            protocol,
+                            host,
+                            port,
+                            alias,
+                            username: username || null,
+                            ignore_http_errors: ignoreHttpErrors,
+                            path: protocol === 'HTTP' ? String(path) : null
+                        };
+                        console.log('Sending data to server:', requestData);
+                        
+                        const response = await fetch('/api/services/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(requestData),
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                                                    showToast('Успех', `Сервис "${alias}" успешно добавлен!`);
+                        serviceForm.reset();
+                        loadServices();
+                        } else {
+                                                    const error = await response.json();
+                        showToast('Ошибка', `Не удалось добавить сервис: ${error.detail}`);
+                        }
+                    } catch (error) {
+                        showToast('Ошибка', `Не удалось добавить сервис: ${error.message}`);
+                    }
+                });
+            }
+            
+            // Load services function
+            async function loadServices() {
+                try {
+                    const response = await fetch('/api/services/');
+                    if (response.ok) {
+                        const services = await response.json();
+                        renderServices(services);
+                    } else {
+                        showToast('Ошибка', 'Не удалось загрузить сервисы');
+                    }
+                } catch (error) {
+                    showToast('Ошибка', `Не удалось загрузить сервисы: ${error.message}`);
+                }
+            }
+            
+            // Render services
+            function renderServices(services) {
+                const container = document.getElementById('services-container');
+                const noServicesMessage = document.getElementById('no-services-message');
+                
+                if (!container) return;
+                
+                if (services.length === 0) {
+                    if (noServicesMessage) noServicesMessage.style.display = 'block';
+                    container.innerHTML = '';
+                    return;
+                }
+                
+                if (noServicesMessage) noServicesMessage.style.display = 'none';
+                container.innerHTML = '';
+                
+                services.forEach(service => {
+                    const serviceCard = createServiceCard(service);
+                    container.appendChild(serviceCard);
+                    loadServiceStatus(service.id);
+                });
+            }
+            
+            // Create service card
+            function createServiceCard(service) {
+                const col = document.createElement('div');
+                col.className = 'col-md-6 col-lg-4 mb-4';
+                col.id = `service-col-${service.id}`;
+                
+                let displayAddress = service.host;
+                
+                if (service.protocol === 'HTTP') {
+                    const protocol = service.port === 443 ? 'https' : 'http';
+                    const portStr = (service.port === 80 && protocol === 'http') || (service.port === 443 && protocol === 'https') 
+                        ? '' : `:${service.port}`;
+                    
+                    displayAddress = `${protocol}://${service.host}${portStr}`;
+                } else {
+                    displayAddress = `${service.host}:${service.port}`;
+                }
+                
+                col.innerHTML = `
+                    <div class="card service-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">${service.alias}</h5>
+                            <button class="btn btn-sm btn-outline-danger delete-service" data-id="${service.id}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                <span class="badge ${service.protocol === 'SSH' ? 'bg-success' : 'bg-primary'}">${service.protocol}</span>
+                                ${displayAddress}
+                                ${service.protocol === 'HTTP' && service.path && service.path !== '/' ? 
+                                    `<span style="color: var(--text-muted, #6c757d);">${service.path}</span>` : ''}
+                            </p>
+                            <div class="marker-container mt-3" id="markers-${service.id}">
+                                <div class="spinner-border spinner-border-sm text-secondary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                            <p class="last-status mt-2" id="last-status-${service.id}">-</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Add delete event listener
+                setTimeout(() => {
+                    const deleteBtn = col.querySelector('.delete-service');
+                    deleteBtn.addEventListener('click', async () => {
+                        await deleteService(service.id);
+                    });
+                }, 0);
+                
+                return col;
+            }
+            
+            // Load service status
+            async function loadServiceStatus(serviceId) {
+                try {
+                    const response = await fetch(`/api/services/${serviceId}/status?limit=50`);
+                    if (response.ok) {
+                        const statuses = await response.json();
+                        renderServiceStatus(serviceId, statuses);
+                    }
+                } catch (error) {
+                    console.error(`Error loading status for service ${serviceId}:`, error);
+                }
+            }
+            
+            // Format date with timezone
+            function formatDateTime(dateStr, includeGMT = true) {
+                // Assuming the server sends UTC dates
+                const date = new Date(dateStr);
+                
+                // Get local timezone name
+                const timeZoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                
+                // Format date with user's local timezone
+                const formattedDate = new Intl.DateTimeFormat('ru', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: timeZoneName
+                }).format(date);
+                
+                if (!includeGMT) {
+                    return formattedDate;
+                }
+                
+                // Add GMT offset
+                const offset = date.getTimezoneOffset();
+                const offsetHours = Math.abs(Math.floor(offset / 60));
+                const offsetMinutes = Math.abs(offset % 60);
+                const offsetSign = offset <= 0 ? '+' : '-';
+                const offsetFormatted = `GMT${offsetSign}${offsetHours.toString().padStart(2, '0')}${offsetMinutes > 0 ? ':' + offsetMinutes.toString().padStart(2, '0') : ''}`;
+                
+                return `${formattedDate} (${offsetFormatted})`;
+            }
+            
+            // Show tooltip notification
+            function showMarkerTooltip(e) {
+                hideMarkerTooltip(true);
+                
+                const marker = e.target;
+                const date = marker.getAttribute('data-date');
+                const status = marker.getAttribute('data-status');
+                const error = marker.getAttribute('data-error');
+                const httpStatus = marker.getAttribute('data-http-status');
+                
+                let tooltipContent = `<div><strong>Время:</strong> ${date}</div>`;
+                tooltipContent += `<div><strong>Статус:</strong> ${status === 'Up' ? 'Доступен' : 'Недоступен'}</div>`;
+                
+                if (httpStatus) {
+                    tooltipContent += `<div><strong>HTTP-статус:</strong> ${httpStatus}</div>`;
+                }
+                
+                if (error) {
+                    tooltipContent += `<div><strong>Ошибка:</strong> ${error}</div>`;
+                }
+                
+                const responseTime = marker.getAttribute('data-response-time');
+                if (responseTime) {
+                    tooltipContent += `<div><strong>Время отклика:</strong> ${responseTime} мс</div>`;
+                }
+                
+                hideMarkerTooltip();
+                
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip bs-tooltip-top show';
+                tooltip.setAttribute('role', 'tooltip');
+                tooltip.id = 'marker-tooltip';
+                tooltip.innerHTML = `
+                    <div class="tooltip-arrow"></div>
+                    <div class="tooltip-inner">${tooltipContent}</div>
+                `;
+                
+                const rect = marker.getBoundingClientRect();
+                const tooltipWidth = 250; 
+                const tooltipHeight = status === 'Up' ? 120 : 150; 
+                const top = rect.top - tooltipHeight - 5;
+                const left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                
+                tooltip.style.position = 'fixed';
+                tooltip.style.top = `${top}px`;
+                tooltip.style.left = `${left}px`;
+                tooltip.style.width = `${tooltipWidth}px`;
+                tooltip.style.zIndex = '1070';
+                tooltip.style.opacity = '1';
+                
+                tooltip.style.transition = 'none';
+                tooltip.style.animation = 'none';
+                
+                tooltip.dataset.sourceMarkerId = marker.id || Date.now().toString();
+                if (!marker.id) marker.id = tooltip.dataset.sourceMarkerId;
+                
+                tooltip.addEventListener('mouseenter', function() {
+                    const existingTooltip = document.getElementById('marker-tooltip');
+                    if (existingTooltip) {
+                        existingTooltip.dataset.mouseOver = 'true';
+                        existingTooltip.style.opacity = '1';
+                    }
+                });
+                
+                tooltip.addEventListener('mouseleave', function() {
+                    const existingTooltip = document.getElementById('marker-tooltip');
+                    if (existingTooltip) {
+                        existingTooltip.dataset.mouseOver = 'false';
+                        setTimeout(hideMarkerTooltip, 100);
+                    }
+                });
+                
+                document.body.appendChild(tooltip);
+                
+                const hoverBridge = document.createElement('div');
+                hoverBridge.id = 'tooltip-hover-bridge';
+                hoverBridge.style.position = 'fixed';
+                hoverBridge.style.top = `${rect.top - tooltipHeight}px`;
+                hoverBridge.style.left = `${rect.left - 10}px`;
+                hoverBridge.style.width = `${Math.max(rect.width + 20, tooltipWidth)}px`;
+                hoverBridge.style.height = `${tooltipHeight + rect.height + 10}px`;
+                hoverBridge.style.background = 'transparent';
+                hoverBridge.style.zIndex = '1060';
+                
+                hoverBridge.style.pointerEvents = 'auto';
+                hoverBridge.addEventListener('mouseenter', function() {
+                    const existingTooltip = document.getElementById('marker-tooltip');
+                    if (existingTooltip) {
+                        existingTooltip.dataset.mouseOver = 'true';
+                        existingTooltip.style.opacity = '1';
+                    }
+                });
+                
+                document.body.appendChild(hoverBridge);
+                
+                const innerEl = tooltip.querySelector('.tooltip-inner');
+                if (innerEl) {
+                    innerEl.style.opacity = '1';
+                    innerEl.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+                    innerEl.style.color = '#ffffff';
+                    innerEl.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.5)';
+                    innerEl.style.transition = 'none';
+                    innerEl.style.border = 'none';
+                }
+            }
+            
+            function hideMarkerTooltip(force = false) {
+                const tooltip = document.getElementById('marker-tooltip');
+                if (tooltip && (force || tooltip.dataset.mouseOver !== 'true')) {
+                    tooltip.remove();
+                    
+                    const bridge = document.getElementById('tooltip-hover-bridge');
+                    if (bridge) bridge.remove();
+                }
+            }
+            
+            // Add click handler on document body to close tooltips when clicking outside
+            document.addEventListener('click', function(e) {
+                const tooltip = document.getElementById('marker-tooltip');
+                const bridge = document.getElementById('tooltip-hover-bridge');
+                
+                if (tooltip && 
+                    !tooltip.contains(e.target) && 
+                    (!bridge || !bridge.contains(e.target)) &&
+                    !e.target.classList.contains('status-marker')) {
+                    hideMarkerTooltip(true);
+                }
+            });
+            
+            // Add escape key handler to close tooltips
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    hideMarkerTooltip(true);
+                }
+            });
+            
+            // Create status markers with modified event listeners
+            function createStatusMarker(status) {
+                const marker = document.createElement('div');
+                marker.className = `status-marker ${getStatusClass(status)}`;
+                marker.style.cursor = 'pointer';
+                const formattedDate = formatDateTime(status.timestamp);
+                marker.title = formattedDate;
+                marker.setAttribute('data-date', formattedDate);
+                marker.setAttribute('data-status', status.status ? 'Up' : 'Down');
+                
+                if (status.error_message) {
+                    marker.setAttribute('data-error', status.error_message);
+                }
+                
+                if (status.http_status) {
+                    marker.setAttribute('data-http-status', status.http_status);
+                }
+                
+                // Add response time data
+                if (status.response_time) {
+                    const responseTimeMs = Math.round(status.response_time * 1000);
+                    marker.setAttribute('data-response-time', responseTimeMs);
+                }
+                
+                let tooltipTimer = null;
+                marker.setAttribute('data-has-tooltip', 'false');
+                
+                marker.addEventListener('mouseenter', function(e) {
+                    if (tooltipTimer) {
+                        clearTimeout(tooltipTimer);
+                        tooltipTimer = null;
+                    }
+                    marker.setAttribute('data-has-tooltip', 'true');
+                    showMarkerTooltip(e);
+                });
+                
+                marker.addEventListener('mouseleave', function() {
+                    marker.setAttribute('data-has-tooltip', 'pending-close');
+                    tooltipTimer = setTimeout(() => {
+                        const tooltip = document.getElementById('marker-tooltip');
+                        if (tooltip && tooltip.dataset.mouseOver !== 'true' && 
+                            marker.getAttribute('data-has-tooltip') === 'pending-close') {
+                            hideMarkerTooltip();
+                            marker.setAttribute('data-has-tooltip', 'false');
+                        }
+                    }, 300);
+                });
+                
+                return marker;
+            }
+            
+            // Render service status with the new marker creation function
+            function renderServiceStatus(serviceId, statuses) {
+                const markerContainer = document.getElementById(`markers-${serviceId}`);
+                const lastStatusEl = document.getElementById(`last-status-${serviceId}`);
+                
+                if (!markerContainer) return;
+                
+                markerContainer.innerHTML = '';
+                
+                if (statuses.length === 0) {
+                    markerContainer.innerHTML = '<span class="text-muted">Пока нет данных</span>';
+                    return;
+                }
+                
+                statuses.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                
+                const lastSuccessful = [...statuses].reverse().find(s => s.status);
+                const lastStatus = statuses[statuses.length - 1];
+                
+                if (lastSuccessful) {
+                    const lastDate = formatDateTime(lastSuccessful.timestamp, false); // Don't include GMT
+                    lastStatusEl.textContent = `Успешная проверка: ${lastDate}`;
+                } else {
+                    lastStatusEl.textContent = 'Еще нет успешных проверок';
+                }
+                
+                statuses.forEach(status => {
+                    const marker = createStatusMarker(status);
+                    markerContainer.appendChild(marker);
+                });
+            }
+            
+            // Get status class for marker
+            function getStatusClass(status) {
+                if (status.status) {
+                    return 'success';
+                } else if (status.http_status && status.http_status >= 300 && status.http_status < 600) {
+                    return 'warning';
+                } else {
+                    return 'error';
+                }
+            }
+            
+            // Delete service
+            async function deleteService(serviceId) {
+                if (!confirm('Вы уверены, что хотите удалить этот сервис?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/services/${serviceId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        showToast('Успех', 'Сервис успешно удален');
+                        const serviceCol = document.getElementById(`service-col-${serviceId}`);
+                        if (serviceCol) serviceCol.remove();
+                        
+                        const container = document.getElementById('services-container');
+                        const noServicesMessage = document.getElementById('no-services-message');
+                        if (container && container.children.length === 0 && noServicesMessage) {
+                            noServicesMessage.style.display = 'block';
+                        }
+                    } else {
+                        showToast('Ошибка', 'Не удалось удалить сервис');
+                    }
+                } catch (error) {
+                    showToast('Ошибка', `Не удалось удалить сервис: ${error.message}`);
+                }
+            }
+            
+            // Show toast notification
+            function showToast(title, message) {
+                const toast = document.getElementById('toast');
+                const toastTitle = document.getElementById('toast-title');
+                const toastMessage = document.getElementById('toast-message');
+                
+                if (!toast || !toastTitle || !toastMessage) return;
+                
+                toastTitle.textContent = title;
+                toastMessage.textContent = message;
+                
+                const bsToast = new bootstrap.Toast(toast);
+                bsToast.show();
+            }
+            
+            // Initial setup
+            loadServices();
+            
+            const refreshInterval = setInterval(() => {
+                try {
+                    loadServices();
+                } catch (error) {
+                    console.error('Error refreshing services:', error);
+                    if (error.message.includes('null')) {
+                        console.error('Stopping automatic refresh due to persistent errors');
+                        clearInterval(refreshInterval);
+                    }
+                }
+            }, 30000);
+        });
+    </script>
+</body>
+</html> 

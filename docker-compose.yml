@@ -1,0 +1,16 @@
+services:
+  pinger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Pinger
+    environment:
+      - HOST=0.0.0.0
+      - PORT=31415
+      - DELAY=300
+      - SSH_TIMEOUT=20
+      - HTTP_TIMEOUT=20
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    network_mode: "host"
